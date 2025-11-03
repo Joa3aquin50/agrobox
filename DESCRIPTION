@@ -1,0 +1,24 @@
+Package: agrobox
+Type: Package
+Title: Herramientas Para la Visualización de Datos en la Agroindustria
+Version: 0.1.0
+Author: Joaquin Alejandro Salinas Angeles
+Maintainer: Joaquin Alejandro Salinas Angeles <joaquinsa03@gmail.com>
+Description: Este paquete proporciona funciones para facilitar la visualización y análisis estadístico de datos en contextos agroindustriales. Su objetivo es mejorar la interpretación y toma de decisiones mediante gráficos claros, pruebas estadísticas automáticas y métricas como la potencia del experimento o el coeficiente de variación.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 3.5.0)
+Imports:
+    dplyr,
+    ggplot2,
+    tidyr,
+    stringr,
+    agricolae,
+    stats,
+    pwr,
+    rlang
+RoxygenNote: 7.3.3
+Language: es
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
