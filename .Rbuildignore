@@ -1,3 +1,35 @@
-^agrobox\.Rproj$
+# Repos/IDE
+^.*\.Rproj$
 ^\.Rproj\.user$
+^\.vscode$
+^\.idea$
+
+# Control de versiones / CI
+^\.git$
+^\.gitignore$
+^\.gitattributes$
+^\.github$
+^codecov\.yml$
+^\.pre-commit-config\.yaml$
+^\.lintr\.yaml$
+
+# Archivos CRAN / release
+^CRAN-SUBMISSION$
+^cran-comments\.md$
+^revdep$
+
+# Documentación generada / sitio
+^README\.Rmd$
+^_pkgdown\.yml$
+^pkgdown$
+^docs$
+
+# Data y utilidades internas que no deben ir al build
+^data-raw$
+^tools$
+^tmp$
+^notes?$
+
+# Otros del sistema
+^\.DS_Store$
 ^LICENSE\.md$

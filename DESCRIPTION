@@ -1,13 +1,39 @@
 Package: agrobox
 Type: Package
-Title: Herramientas Para la Visualización de Datos en la Agroindustria
-Version: 0.1.0
-Author: Joaquin Alejandro Salinas Angeles
+Title: Data Visualization and Statistical Tools for Agroindustrial Experiments
+Version: 0.2.1
+Authors@R: 
+    c(person(given = c("Joaquin", "Alejandro"),
+             family = "Salinas Angeles",
+             role = c("aut", "cre"),
+             email = "joaquinsa03@gmail.com",
+             comment = c(ORCID = "0009-0005-6174-9714")))
 Maintainer: Joaquin Alejandro Salinas Angeles <joaquinsa03@gmail.com>
-Description: Este paquete proporciona funciones para facilitar la visualización y análisis estadístico de datos en contextos agroindustriales. Su objetivo es mejorar la interpretación y toma de decisiones mediante gráficos claros, pruebas estadísticas automáticas y métricas como la potencia del experimento o el coeficiente de variación.
+Description: 
+    Set of tools for statistical analysis, visualization, and reporting of
+    agroindustrial and agricultural experiments. The package provides functions
+    to perform ANOVA with post-hoc tests (e.g. Tukey HSD and Duncan MRR),
+    compute coefficients of variation, and generate publication-ready summaries.
+    High-level wrappers allow automated multi-variable analysis with optional
+    clustering by experimental factors, as well as direct export of results to
+    Excel spreadsheets and high-resolution image tables for reporting.
+    Functions build on 'ggplot2', 'stats', and related packages and follow
+    methods widely used in agronomy (field trials and plant breeding).
+    Key references include Tukey (1949) <doi:10.2307/3001913>,
+    Duncan (1955) <doi:10.2307/3001478>, and Cohen (1988, ISBN:9781138892899);
+    see also 'agricolae' <https://CRAN.R-project.org/package=agricolae>
+    and Wickham (2016, ISBN:9783319242750> for 'ggplot2'.
+    Versión en español: Conjunto de herramientas para el análisis estadístico,
+    visualización y generación de reportes en ensayos agroindustriales y
+    agrícolas. Incluye funciones para ANOVA con pruebas post-hoc,
+    resúmenes automáticos multivariables con o sin agrupamiento por factores,
+    y exportación directa de resultados a Excel e imágenes de alta resolución
+    para informes técnicos.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Depends: R (>= 3.5.0)
+Language: en, es
+Depends: 
+    R (>= 3.5.0)
 Imports:
     dplyr,
     ggplot2,
@@ -16,9 +42,14 @@ Imports:
     agricolae,
     stats,
     pwr,
-    rlang
-RoxygenNote: 7.3.3
-Language: es
-Suggests: 
+    rlang,
+    openxlsx
+Suggests:
+    kableExtra,
+    magick,
+    tinytex,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+RoxygenNote: 7.3.3
+URL: https://github.com/Joa3aquin50/agrobox
+BugReports: https://github.com/Joa3aquin50/agrobox/issues
