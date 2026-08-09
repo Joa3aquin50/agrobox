@@ -1,0 +1,133 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-02-22"
+---
+```{r}
+install.packages(c("hexSticker", "ggplot2"))
+
+library(ggplot2)
+library(hexSticker)
+
+# Datos ejemplo
+set.seed(123)
+df <- data.frame(
+  tratamiento = rep(c("A", "B", "C"), each = 20),
+  valor = c(rnorm(20, 12, 2),
+            rnorm(20, 12, 2),
+            rnorm(20, 12, 2))
+)
+
+# Gráfico base
+p <- ggplot(df, aes(tratamiento, valor)) +
+  geom_boxplot(
+    fill = NA,
+    color = "white",
+    width = 0.45,
+    size = 0.3,
+    outlier.shape = NA
+  ) +
+  geom_jitter(
+    width = 0.12,
+    size = 0.6,
+    alpha = 0.35,
+    color = "#CFE8E3"
+  ) +
+  theme_void() +
+  theme(
+    plot.margin = margin(0, 0, 0, 0)
+  )
+
+sticker(
+  subplot = p,
+  package = "AGROBOX",
+  p_size = 10,
+  p_color = "white",
+  p_x = 1,
+  p_y = 1.5,
+  s_x = 1,
+  s_y = 0.9,
+  s_width = 1.2,
+  s_height = 1.2,
+  h_fill = "#0B2E26",   # verde más profundo
+  h_color = "#BFD8D2",  # borde más suave
+  h_size = 3,
+  filename = "agrobox_hex.png"
+)
+
+
+```
+
+```{r}
+library(ggplot2)
+library(hexSticker)
+
+set.seed(123)
+
+df <- data.frame(
+  tratamiento = rep(c("A", "B", "C"), each = 20),
+  valor = rnorm(60, 12, 2)
+)
+
+# Datos para burbujas de fondo
+bg <- data.frame(
+  tratamiento = sample(c("A","B","C"), 12, replace = TRUE),
+  valor = runif(12, min(df$valor)-1, max(df$valor)+1),
+  size = runif(12, 8, 20)
+)
+
+p <- ggplot(df, aes(tratamiento, valor)) +
+
+  # 🔵 Fondo burbujas (mismo eje discreto)
+  geom_point(
+    data = bg,
+    aes(tratamiento, valor, size = size),
+    color = "#1F5A4C",
+    alpha = 0.15,
+    inherit.aes = FALSE
+  ) +
+
+  # 📦 Boxplot
+  geom_boxplot(
+    fill = NA,
+    color = "white",
+    width = 0.45,
+    size = 0.4,
+    outlier.shape = NA
+  ) +
+
+  # 🔬 Jitter
+  geom_jitter(
+    width = 0.12,
+    size = 0.6,
+    alpha = 0.35,
+    color = "#CFE8E3"
+  ) +
+
+  scale_size_identity() +
+  theme_void() +
+  theme(plot.margin = margin(0,0,0,0))
+
+sticker(
+  subplot = p,
+  package = "AGROBOX",
+  p_size = 9,
+  p_color = "white",
+  p_x = 1,
+  p_y = 1.6,
+  s_x = 1,
+  s_y = 1,
+  s_width = 1.55,
+  s_height = 1.55,
+  h_fill = "#0B2E26",   # verde más profundo
+  h_color = "#BFD8D2",  # borde más suave
+  h_size = 3,
+  filename = "agrobox_hex_2.png"
+)
+```
+
+# cargar web 
+```{r}
+pkgdown::init_site()
+```
+

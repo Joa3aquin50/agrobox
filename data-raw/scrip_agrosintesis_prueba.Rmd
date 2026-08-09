@@ -1,0 +1,573 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-01-11"
+---
+
+# agrosintesis: prueba 
+```{r}
+agrosintesis <- function(
+  data,
+  variables,
+  estructura = NULL,
+  verbose = FALSE,
+  report  = TRUE,
+  color   = TRUE,
+  ...
+) {
+
+  .get_decision_status <- function(p, power, cv) {
+
+  # ---- Normalizar entradas ----
+  if (length(p) == 0 || is.null(p))      p <- NA_real_
+  if (length(power) == 0 || is.null(power)) power <- NA_real_
+  if (length(cv) == 0 || is.null(cv))    cv <- NA_real_
+
+  # ---- Reglas agronómicas ----
+
+  # 1️⃣ Datos insuficientes
+  if (is.na(p) && is.na(power)) {
+    return("Datos insuficientes para decisión")
+  }
+
+  # 2️⃣ No significativo
+  if (!is.na(p) && p >= 0.05) {
+    return("Sin diferencias estadísticas")
+  }
+
+  # 3️⃣ Significativo pero con baja potencia
+  if (!is.na(p) && p < 0.05 && !is.na(power) && power < 0.6) {
+    return("Resultado significativo pero poco confiable")
+  }
+
+  # 4️⃣ Significativo y confiable
+  if (!is.na(p) && p < 0.05 && !is.na(power) && power >= 0.8) {
+    return("Resultado confiable y significativo")
+  }
+
+  # 5️⃣ Significativo con potencia intermedia
+  if (!is.na(p) && p < 0.05 && !is.na(power)) {
+    return("Resultado significativo (potencia moderada)")
+  }
+
+  # 6️⃣ Mucha variabilidad experimental
+  if (!is.na(cv) && cv > 25) {
+    return("Alta variabilidad experimental")
+  }
+
+  # fallback seguro
+  "Resultado no concluyente"
+  }
+  
+    # -------------------------------------------------------------------------
+  # HELPER: apply color formatting to decision labels for cli output
+  # -------------------------------------------------------------------------
+  .color_status <- function(estado) {
+    dplyr::case_when(
+      estado == "Resultado confiable y significativo"        ~
+        cli::col_green(estado),
+      estado == "Resultado significativo (potencia moderada)" ~
+        cli::col_yellow(estado),
+      estado == "Resultado significativo pero poco confiable" ~
+        cli::col_red(estado),
+      estado == "Sin diferencias estadisticas"               ~
+        cli::col_cyan(estado),
+      estado == "Alta variabilidad experimental"             ~
+        cli::col_magenta(estado),
+      estado == "Datos insuficientes para decision"          ~
+        cli::col_silver(estado),
+      TRUE ~
+        cli::col_white(estado)
+    )
+  }
+  # --------------------------------------------------
+  # Logger interno (no depende de cli)
+  # --------------------------------------------------
+  log_msg <- function(...) {
+    if (isTRUE(verbose)) {
+      message("[AGROSINTESIS] ", sprintf(...))
+    }
+  }
+
+  # --------------------------------------------------
+  # Función interna: síntesis por subconjunto
+  # --------------------------------------------------
+  sintetizar <- function(data_sub, titulo = NULL) {
+
+    tablas     <- list()
+    decisiones <- list()
+
+    log_msg("Iniciando análisis de %d variables.", length(variables))
+
+    for (v in variables) {
+
+      log_msg("Analizando variable: %s", v)
+
+      # ---- evitar que verbose llegue a agrobox ----
+      args_agrobox <- list(...)
+      args_agrobox$verbose <- NULL
+
+      res <- do.call(
+        agrobox,
+        c(
+          list(
+            data       = data_sub,
+            variable   = v,
+            estructura = NULL
+          ),
+          args_agrobox
+        )
+      )
+
+      # ---- tabla ----
+      tab <- res$tabla
+      colnames(tab)[1]  <- "trt"
+      colnames(tab)[-1] <- v
+      tablas[[v]] <- tab
+
+      # ---- estadísticos globales (1 fila por cluster) ----
+      st <- res$stats[1, ]
+
+      decision <- .get_decision_status(
+        p     = st$anova_p,
+        power = st$Power,
+        cv    = st$CV
+      )
+
+      log_msg(
+        "%s | p=%.3f | Power=%.2f | CV=%.1f%% → %s",
+        v, st$anova_p, st$Power, st$CV, decision
+      )
+
+      decisiones[[v]] <- data.frame(
+        variable = v,
+        p_value  = st$anova_p,
+        power    = st$Power,
+        CV       = st$CV,
+        decision = decision,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    # ---- unir tablas ----
+    tabla_final <- Reduce(
+      function(x, y) dplyr::bind_cols(x, y[-1]),
+      tablas
+    )
+
+    decision_df <- dplyr::bind_rows(decisiones)
+
+    # ---- reporte ejecutivo ----
+    if (report && requireNamespace("cli", quietly = TRUE)) {
+
+      if (!is.null(titulo)) {
+        cli::cli_h2(titulo)
+      } else {
+        cli::cli_h1("AGROSINTESIS · RESUMEN DE DECISIÓN")
+      }
+
+      cli::cli_rule()
+
+      for (i in seq_len(nrow(decision_df))) {
+
+        d <- decision_df[i, ]
+
+        estado <- d$decision
+        if (color) estado <- .color_status(estado)
+
+        cli::cli_text("{d$variable}: {estado}")
+        cli::cli_text(
+          "  p = {format(d$p_value, digits = 3)} | power = {round(d$power, 2)} | CV = {round(d$CV, 1)}%"
+        )
+        cli::cli_rule()
+      }
+    }
+
+    list(
+      tabla    = tabla_final,
+      decision = decision_df
+    )
+  }
+
+  # --------------------------------------------------
+  # CASO 1: SIN CLUSTERS
+  # --------------------------------------------------
+  if (is.null(estructura)) {
+    log_msg("Ejecutando síntesis global (sin clusters).")
+    return(sintetizar(data))
+  }
+
+# --------------------------------------------------
+  # CASO 2: CON CLUSTERS
+  # --------------------------------------------------
+  estructura_formula <- stats::as.formula(estructura)
+  vars_cluster       <- all.vars(estructura_formula)
+
+  # -------------------------------------------------------------------------
+  # Detectar que orden corresponde a que variable de cluster.
+  # La logica replica exactamente como agrobox parsea 'estructura':
+  #   estructura = "grupe1~grupe2"  -> vars_cluster[1]=grupe1, vars_cluster[2]=grupe2
+  #   estructura = "~grupe2"        -> vars_cluster[1]=grupe2  (solo columnas)
+  #   estructura = "grupe1~"        -> vars_cluster[1]=grupe1  (solo filas)
+  #
+  # Para saber si hay grupe1 o grupe2 parseamos igual que agrobox:
+  # -------------------------------------------------------------------------
+  args_extra <- list(...)
+
+  partes_estructura <- stringr::str_split_fixed(estructura, "~", 2)
+  grupe1_nombre     <- stringr::str_trim(partes_estructura[, 1])
+  grupe2_nombre     <- stringr::str_trim(partes_estructura[, 2])
+
+  tiene_grupe1 <- nzchar(grupe1_nombre)
+  tiene_grupe2 <- nzchar(grupe2_nombre)
+
+  # Extraer los ordenes que el usuario paso
+  orden_g1 <- args_extra[["grupo1_orden"]]
+  orden_g2 <- args_extra[["grupo2_orden"]]
+
+  # Funcion interna: normalizar vector de orden (igual que aplicar_orden_labels)
+  normalizar_orden <- function(orden_vec) {
+    if (is.null(orden_vec)) return(NULL)
+    nms <- names(orden_vec)
+    if (is.null(nms)) {
+      names(orden_vec) <- orden_vec
+    } else {
+      faltantes <- nms == ""
+      names(orden_vec)[faltantes] <- orden_vec[faltantes]
+    }
+    orden_vec
+  }
+
+  orden_g1 <- normalizar_orden(orden_g1)
+  orden_g2 <- normalizar_orden(orden_g2)
+
+  # Funcion interna: aplicar orden a una columna de cluster en data_local
+  aplicar_orden_cluster <- function(data_local, nombre_var, orden_vec) {
+    if (is.null(orden_vec) || !nombre_var %in% names(data_local))
+      return(data_local)
+
+    niveles_ordenados <- names(orden_vec)
+    vals_en_data      <- as.character(unique(data_local[[nombre_var]]))
+
+    # Separar los que estan en el orden de los que no
+    niveles_validos <- niveles_ordenados[niveles_ordenados %in% vals_en_data]
+    niveles_extra   <- vals_en_data[!vals_en_data %in% niveles_validos]
+
+    # Ordenar los extras numericamente si es posible, sino alfabeticamente
+    nums <- suppressWarnings(as.numeric(niveles_extra))
+    if (length(niveles_extra) > 0 && !any(is.na(nums))) {
+      niveles_extra <- niveles_extra[order(nums)]
+    } else {
+      niveles_extra <- sort(niveles_extra)
+    }
+
+    data_local[[nombre_var]] <- factor(
+      data_local[[nombre_var]],
+      levels = c(niveles_validos, niveles_extra)
+    )
+    data_local
+  }
+
+  data_local <- data
+
+  # Aplicar orden a grupe1 si corresponde
+  if (tiene_grupe1 && grupe1_nombre %in% names(data_local)) {
+    data_local <- aplicar_orden_cluster(data_local, grupe1_nombre, orden_g1)
+  }
+
+  # Aplicar orden a grupe2 si corresponde
+  if (tiene_grupe2 && grupe2_nombre %in% names(data_local)) {
+    data_local <- aplicar_orden_cluster(data_local, grupe2_nombre, orden_g2)
+  }
+
+  # Asegurar factor en todas las vars de cluster
+  for (v in vars_cluster) {
+    if (v %in% names(data_local) && !is.factor(data_local[[v]])) {
+      data_local[[v]] <- factor(data_local[[v]], levels = unique(data_local[[v]]))
+    }
+  }
+
+  # Construir tabla de clusters respetando el orden de los factores
+  clusters <- dplyr::distinct(
+    data_local,
+    dplyr::across(dplyr::all_of(vars_cluster))
+  )
+
+  # Ordenar clusters segun los niveles ya definidos
+  if (length(vars_cluster) == 2) {
+    clusters <- clusters[order(
+      match(as.character(clusters[[vars_cluster[1]]]),
+            levels(data_local[[vars_cluster[1]]])),
+      match(as.character(clusters[[vars_cluster[2]]]),
+            levels(data_local[[vars_cluster[2]]]))
+    ), , drop = FALSE]
+  } else if (length(vars_cluster) == 1) {
+    clusters <- clusters[order(
+      match(as.character(clusters[[vars_cluster[1]]]),
+            levels(data_local[[vars_cluster[1]]]))
+    ), , drop = FALSE]
+  }
+
+  # Filtrar clusters: solo procesar los que estan en el orden especificado
+  # Si se especifico orden para grupe2 (caso ~grupe2), filtrar por esos niveles
+  if (tiene_grupe2 && !is.null(orden_g2) && grupe2_nombre %in% names(clusters)) {
+    niveles_g2_validos <- names(orden_g2)
+    clusters <- clusters[
+      as.character(clusters[[grupe2_nombre]]) %in% niveles_g2_validos,
+      , drop = FALSE
+    ]
+  }
+
+  # Si se especifico orden para grupe1 (caso grupe1~), filtrar por esos niveles
+  if (tiene_grupe1 && !is.null(orden_g1) && grupe1_nombre %in% names(clusters)) {
+    niveles_g1_validos <- names(orden_g1)
+    clusters <- clusters[
+      as.character(clusters[[grupe1_nombre]]) %in% niveles_g1_validos,
+      , drop = FALSE
+    ]
+  }
+
+  resultados <- list()
+  log_msg("Detectados %d clusters.", nrow(clusters))
+
+  for (i in seq_len(nrow(clusters))) {
+
+    filtro       <- clusters[i, , drop = FALSE]
+    data_cluster <- dplyr::semi_join(data_local, filtro, by = vars_cluster)
+
+    nombre <- paste(
+      mapply(
+        function(var, val) paste0(var, "=", as.character(val)),
+        vars_cluster,
+        filtro,
+        SIMPLIFY = TRUE
+      ),
+      collapse = " | "
+    )
+
+    log_msg("Procesando cluster: %s", nombre)
+
+    resultados[[nombre]] <- sintetizar(
+      data_cluster,
+      titulo = paste("AGROSINTESIS ·", nombre)
+    )
+  }
+
+  resultados
+}
+```
+
+# prueba
+```{r}
+library(tidyverse)
+library(agrobox)
+set.seed(123)
+
+# Diseño factorial con bloques
+df_experimento <- expand.grid(
+  Fertilizante = c("A", "B", "C"),
+  Dosis        = c("Baja", "Media", "Alta"),
+  Localidad    = c("Loc1", "Loc2"),
+  Variedad     = c("Var1", "Var2", "Var3"),
+  Bloque       = paste0("B", 1:4)
+)
+
+n <- nrow(df_experimento)
+
+# --------------------------------------------------
+# 1️⃣ Rendimiento (tn/ha)
+#    Buen efecto + bajo error → ENSAYO CONFIABLE
+# --------------------------------------------------
+df_experimento$tn_ha <- 20 +
+  ifelse(df_experimento$Fertilizante == "B", 2,
+         ifelse(df_experimento$Fertilizante == "C", 4, 0)) +
+  ifelse(df_experimento$Dosis == "Media", 1,
+         ifelse(df_experimento$Dosis == "Alta", 2, 0)) +
+  rnorm(n, mean = 0, sd = 1.0)   # bajo error
+
+# --------------------------------------------------
+# 2️⃣ Peso de fruto (g)
+#    Efecto real pero error moderado → BAJA POTENCIA
+# --------------------------------------------------
+df_experimento$peso_fruto <- 120 +
+  ifelse(df_experimento$Fertilizante == "C", 5, 0) +
+  rnorm(n, mean = 0, sd = 8)     # error relativamente alto
+
+# --------------------------------------------------
+# 3️⃣ Número de frutos
+#    Efecto pequeño + mucho ruido → ALTA VARIABILIDAD
+# --------------------------------------------------
+df_experimento$n_frutos <- 50 +
+  ifelse(df_experimento$Dosis == "Alta", 2, 0) +
+  rnorm(n, mean = 0, sd = 12)    # CV muy alto
+
+# --------------------------------------------------
+# 4️⃣ Altura de planta (cm)
+#    Sin efecto real + bajo error → NO SIGNIFICATIVO
+# --------------------------------------------------
+df_experimento$altura_cm <- 95 +
+  rnorm(n, mean = 0, sd = 2)     # bien medido, sin tratamiento
+
+str(df_experimento)
+
+res <- agrosintesis(
+  data      = df_experimento,
+  variables = c("tn_ha", "peso_fruto", "n_frutos", "altura_cm"),
+  estructura = "Variedad~Localidad",
+  factor    = "Fertilizante",
+  factor2   = "Dosis",
+  bloque    = "Bloque",
+  verbose   = FALSE
+)
+
+res <- agrosintesis(
+  data      = pimiento_hibridacion,
+  variables = c("g_pla", "g_fru"),
+  factor    = "trata",
+  bloque    = "bloque",
+    grupo2_orden = c("1" = "Día 0",
+                   "4"= "Día 4",
+                   "8" = "Día 8",
+                   "12" = "Día 12",
+                   "16" = "Día 16",
+                   "20" = "Día 20"),
+  estructura = "~dia",
+  verbose   = FALSE
+)
+
+# Ejecutar agrosintesis
+res <- agrosintesis(
+  data = df_experimento,
+  variables = c("mpg", "hp"),
+  estructura = NULL,
+  factor = "cyl"
+)
+
+# Ver tabla consolidada
+res$tabla
+
+# Ver síntesis decisional
+res$decision
+
+```
+
+## cargar datos para paquete
+
+```{r}
+
+library(readxl)
+library(janitor)
+
+nitrogeno_liberacion <- read_excel("C:/Repositorios R/ALBI/nitrogeno_liberacion_agrobox.xlsx")%>%
+  clean_names()
+
+str(nitrogeno_liberacion)
+
+agrobox(
+  data = nitrogeno_liberacion,
+  test = "Tukey",
+  factor = "trata",
+  variable = "nh4_mg_lt",
+  orden_factor = c( "T1" = "Fertilizante (14-4-4)",
+                    "T2" = "Pellet (14-4-4)",
+                    "T3" = "Fertilizante (7-7-19)",
+                    "T4" = "Pellet (7-7-19)"),
+  grupo1_orden = c("14.4.4" = "Ley 14 N - 4 P2O5 - 4 K2O",
+                   "7.7.19" = "Ley 7 N - 7 P2O5 - 19 K2O"),
+  grupo2_orden = c("0" = "Día 0",
+                   "1" = "Día 1",
+                   "8" = "Día 8",
+                   "16" = "Día 16",
+                   "41" = "Día 41"),
+  estructura = "formu~dias",
+  colores = c("purple3", "green4","black", "red3")
+)
+
+
+res <- agrosintesis(
+  data      = nitrogeno_liberacion,
+  variables = c("nh4_mg_lt", "no3_mg_lt", "k_mg_lt"),
+  factor    = "trata",
+  orden_factor = c( "T1" = "Fertilizante (14-4-4)",
+                    "T2" = "Pellet (14-4-4)",
+                    "T3" = "Fertilizante (7-7-19)",
+                    "T4" = "Pellet (7-7-19)"),
+  grupo1_orden = c("14.4.4" = "Ley 14 N - 4 P2O5 - 4 K2O",
+                   "7.7.19" = "Ley 7 N - 7 P2O5 - 19 K2O"),
+  grupo2_orden = c("0" = "Día 0",
+                   "1" = "Día 1",
+                   "8" = "Día 8",
+                   "16" = "Día 16",
+                   "41" = "Día 41"),
+  estructura = "formu~dias",
+  verbose   = FALSE
+)
+
+```
+
+
+```{r}
+
+library(tidyverse)
+library(readxl)
+library(janitor)
+
+pimiento_hibridacion <- read_excel("C:/Repositorios R/ALBI/pimiento_hibridacion.xlsx")%>%
+  clean_names()%>%
+  group_by(trata, bloque, descripcion, dia)%>%
+  summarise(g_semilla = sum ( as.numeric(semilla)),
+          n_frutos = sum( as.numeric(frutos)),
+          n_flores = mean(as.numeric(flores)),
+          n_plantas = mean(as.numeric(planta)))%>%
+  ungroup()%>%
+  mutate(g_pla = g_semilla / n_plantas,
+         g_fru = g_semilla / n_frutos,
+         descripcion = as.character(descripcion))%>%
+  mutate(
+    descripcion = dplyr::case_when(
+      descripcion == "34" ~ "5 semanas de hibridación",
+      descripcion == "27" ~ "4 semanas de hibridación",
+      descripcion == "21" ~ "3 semanas de hibridación",
+      TRUE ~ as.character(descripcion)
+    ),
+    descripcion = factor(
+      descripcion,
+      levels = c(
+        "5 semanas de hibridación",
+        "4 semanas de hibridación",
+        "3 semanas de hibridación"
+      )
+    )
+  )%>%
+  mutate(
+    bloque = paste0("B", bloque),
+    bloque = factor(bloque)
+  )
+
+
+str(pimiento_hibridacion)
+
+a = agrobox(
+  data = pimiento_hibridacion,
+  test = "Tukey",
+  factor = "trata",
+  bloque = "bloque",
+  variable = "g_pla",
+  titulo = "Rendimiento (g/pla)",
+  orden_factor = c( "T1" = "5",
+                    "T2" = "4",
+                    "T3" = "3"),
+  grupo2_orden = c("1" = "Día 0",
+                   "4"= "Día 4",
+                   "8" = "Día 8",
+                   "12" = "Día 12",
+                   "16" = "Día 16",
+                   "20" = "Día 20"),
+  estructura = "~dia",
+  colores = c("purple3", "green4","black", "red3")
+)$plot + 
+  labs(col = "Semanas de hibridación")
+
+
+usethis::use_data(pimiento_hibridacion, overwrite = TRUE)
+```

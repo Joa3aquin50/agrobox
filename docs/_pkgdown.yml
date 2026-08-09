@@ -1,0 +1,26 @@
+template:
+  bootstrap: 5
+  bootswatch: cosmo   # puedes probar: flatly, cosmo, minty, yeti
+
+navbar:
+  structure:
+    left:  [home, reference, articles, news]
+    right: [github]
+
+home:
+  title: "AGROBOX"
+  description: "Experimental Research Toolkit for Agricultural Data Analysis"
+
+logo:
+  path: man/figures/agrobox_hex_2.png
+  alt: "AGROBOX logo"
+
+reference:
+  - title: "Core Functions"
+    contents:
+      - starts_with("agro")
+
+footer:
+  structure:
+    left:  developed_by
+    right:  built_with

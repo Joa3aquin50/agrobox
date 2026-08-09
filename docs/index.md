@@ -1,0 +1,21 @@
+Set of tools for statistical analysis, visualization, and reporting of
+agroindustrial and agricultural experiments. The package provides
+functions to perform ANOVA with post-hoc tests (e.g. Tukey HSD and
+Duncan MRR), compute coefficients of variation, and generate
+publication-ready summaries. High-level wrappers allow automated
+multi-variable analysis with optional clustering by experimental
+factors, as well as direct export of results to Excel spreadsheets and
+high-resolution image tables for reporting. Functions build on
+'ggplot2', 'stats', and related packages and follow methods widely used
+in agronomy (field trials and plant breeding). Key references include
+Tukey (1949) \<[doi:10.2307/3001913](https://doi.org/10.2307/3001913)\>,
+Duncan (1955)
+\<[doi:10.2307/3001478](https://doi.org/10.2307/3001478)\>, and Cohen
+(1988, ISBN:9781138892899); see also 'agricolae'
+\<<https://CRAN.R-project.org/package=agricolae>\> and Wickham (2016,
+ISBN:9783319242750\> for 'ggplot2'. Versión en español: Conjunto de
+herramientas para el análisis estadístico, visualización y generación de
+reportes en ensayos agroindustriales y agrícolas. Incluye funciones para
+ANOVA con pruebas post-hoc, resúmenes automáticos multivariables con o
+sin agrupamiento por factores, y exportación directa de resultados a
+Excel e imágenes de alta resolución para informes técnicos.
