@@ -1,7 +1,7 @@
 Package: agrobox
 Type: Package
 Title: Data Visualization and Statistical Tools for Agroindustrial Experiments
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: 
     c(person(given = c("Joaquin", "Alejandro"),
              family = "Salinas Angeles",
@@ -15,11 +15,16 @@ Description:
     to perform one-way and two-way ANOVA with post-hoc tests (Tukey HSD and
     Duncan MRT), Welch ANOVA for heteroscedastic data, and the Games-Howell
     post-hoc test as a robust alternative when variance homogeneity fails.
+    When residual normality fails, the Kruskal-Wallis test (with 'agricolae'
+    or Dunn post-hoc letters) or, for blocked designs, the Friedman test is
+    used, so that letters are always obtained through a defensible route.
     Normality of residuals is assessed with the Shapiro-Wilk test and
     homoscedasticity with the Fligner-Killeen test; the appropriate statistical
     path is selected automatically based on these diagnostics. Coefficients of
     variation and statistical power (via one-way ANOVA power analysis) are
-    reported alongside the post-hoc letter display. High-level wrappers allow
+    reported alongside the post-hoc letter display, and each figure includes
+    a note describing the statistical route used, its rationale, advantages,
+    limitations and scope. High-level wrappers allow
     automated multi-variable analysis with optional clustering by one or two
     experimental factors, with support for custom level ordering and relabeling.
     Results are returned as 'ggplot2' boxplots with mean and letter annotations,
@@ -35,6 +40,9 @@ Description:
     Games and Howell (1976) <doi:10.2307/2529858>;
     Shapiro and Wilk (1965) <doi:10.2307/2333709>;
     Fligner and Killeen (1976) <doi:10.2307/2529096>;
+    Kruskal and Wallis (1952) <doi:10.1080/01621459.1952.10483441>;
+    Dunn (1964) <doi:10.1080/00401706.1964.10490181>;
+    Friedman (1937) <doi:10.1080/01621459.1937.10503522>;
     Cohen (1988, ISBN:9781138892899);
     Wickham (2016, ISBN:9783319242750) for 'ggplot2';
     see also 'agricolae' <https://CRAN.R-project.org/package=agricolae>
@@ -44,11 +52,16 @@ Description:
     agricolas. Incluye ANOVA univariado y bifactorial con pruebas post-hoc
     (Tukey HSD y Duncan MRT), ANOVA de Welch para datos heterocedasticos y
     la prueba post-hoc de Games-Howell como alternativa robusta cuando falla
-    la homogeneidad de varianzas. La normalidad de residuos se evalua con la
+    la homogeneidad de varianzas. Cuando falla la normalidad de residuos se
+    usa la prueba de Kruskal-Wallis (con letras de 'agricolae' o de Dunn) o,
+    en disenos en bloques, la prueba de Friedman, de modo que las letras se
+    obtienen siempre por una ruta defendible. La normalidad de residuos se evalua con la
     prueba de Shapiro-Wilk y la homogeneidad de varianzas con la prueba de
     Fligner-Killeen; la ruta estadistica apropiada se selecciona automaticamente
     segun estos diagnosticos. Se reportan coeficientes de variacion y potencia
-    estadistica junto con las letras de separacion de medias. Los envoltorios
+    estadistica junto con las letras de separacion de medias, y cada grafico
+    incluye una nota que describe la ruta estadistica usada, por que, sus
+    ventajas, desventajas y alcance. Los envoltorios
     de alto nivel permiten analisis multivariable automatizado con agrupamiento
     opcional por uno o dos factores experimentales, con soporte para orden y
     etiquetado personalizado de niveles. Los resultados se devuelven como
@@ -79,6 +92,8 @@ Suggests:
     magick,
     tinytex,
     cli,
+    officer,
+    rvg,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 RoxygenNote: 7.3.3

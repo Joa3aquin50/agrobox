@@ -1,8 +1,8 @@
-#' Boxplot con anotaciones post-hoc estadísticas para experimentos agronómicos
+#' Boxplot con anotaciones post-hoc estadisticas para experimentos agronomicos
 #' / Boxplot with Statistical Post-hoc Annotations for Agronomic Experiments
 #'
 #' Genera boxplots con puntos jitter, etiquetas de medias y letras de comparación
-#' múltiple para experimentos agronómicos. Soporta facetas con hasta dos variables
+#' multiple para experimentos agronómicos. Soporta facetas con hasta dos variables
 #' de agrupación y selecciona automáticamente el método estadístico en función de
 #' la normalidad (Shapiro-Wilk) y la homogeneidad de varianzas (Fligner-Killeen).
 #'
@@ -12,43 +12,46 @@
 #' (Shapiro-Wilk) and homoscedasticity (Fligner-Killeen) tests.
 #'
 #' @details
-#' La función aplica la siguiente lógica de decisión para cada panel (cluster):
+#' Objetivo: colocar letras de comparación múltiple mediante una ruta
+#' estadística viable y defendible. Para cada panel (cluster) la función:
 #'
-#' The function applies the following decision logic for each facet panel (cluster):
+#' Goal: place multiple-comparison letters through a viable, defensible
+#' statistical route. For each facet panel (cluster) the function:
 #'
 #' \enumerate{
-#'   \item Prueba de Shapiro-Wilk sobre los residuos del ANOVA. Si la normalidad falla
-#'         (p <= 0.05), solo se muestran las medias sin letras.
-#'
-#'         Shapiro-Wilk test on ANOVA residuals. If normality fails (p <= 0.05),
-#'         only means are shown with no letters.
-#'
-#'   \item Si \code{var.equal = TRUE} (ANOVA clásico): se aplica la prueba de
-#'         Fligner-Killeen. Si falla la homogeneidad, solo se muestran medias.
-#'         Si pasa, se usa ANOVA + post-hoc Duncan o Tukey.
-#'
-#'         If \code{var.equal = TRUE} (classic ANOVA path): Fligner-Killeen test is
-#'         applied. If homoscedasticity fails, only means are shown. Otherwise,
-#'         ANOVA + Duncan or Tukey post-hoc is used.
-#'
-#'   \item Si \code{var.equal = FALSE} (ruta Welch):
+#'   \item Verifica datos suficientes (>= 2 tratamientos, >= 3 observaciones
+#'         por tratamiento, datos no constantes). Si no, solo muestra medias.
+#'         / Checks for sufficient data; otherwise only means are shown.
+#'   \item Evalúa normalidad de residuos (Shapiro-Wilk) y homogeneidad de
+#'         varianzas (Fligner-Killeen). / Tests residual normality and
+#'         homoscedasticity.
+#'   \item Elige la ruta / Chooses the route:
 #'     \itemize{
-#'       \item Si Fligner pasa (p > 0.05): se usa ANOVA estándar + Duncan o Tukey.
-#'       \item Si Fligner falla: se usa Welch + Games-Howell.
-#'       \item CV y Power solo se reportan cuando ff_p > 0.01.
-#'       \item Si alguna comparación tiene p-valor NA o falta algún grupo en las
-#'             letras, se eliminan las letras para todo el cluster.
+#'       \item \strong{A} normal + homogéneo: ANOVA (con bloque y
+#'             \code{factor2} si se indican) + Duncan o Tukey.
+#'       \item \strong{B} normal + heterogéneo: ANOVA de Welch + Games-Howell
+#'             (bloque y \code{factor2} no se consideran).
+#'       \item \strong{C} no normal + homogéneo: Friedman si hay bloque
+#'             (DBCA completo; réplicas promediadas, bloques incompletos
+#'             excluidos; letras protegidas por el Friedman global), si no
+#'             Kruskal-Wallis con letras de \code{agricolae::kruskal}
+#'             (\code{np_test = "kruskal"}) o Dunn (\code{np_test = "dunn"}).
+#'       \item \strong{D} no normal + heterogéneo: mismas pruebas que C,
+#'             con una nota de varianzas heterogéneas.
 #'     }
-#'
-#'     If \code{var.equal = FALSE} (Welch path):
-#'     \itemize{
-#'       \item If Fligner passes (p > 0.05): standard ANOVA + Duncan or Tukey is used.
-#'       \item If Fligner fails: Welch test + Games-Howell post-hoc is used.
-#'       \item CV and Power are reported only when ff_p > 0.01.
-#'       \item If any pairwise comparison has NA p-value or any group is missing
-#'             from the letter display, letters are suppressed for the entire cluster.
-#'     }
+#'   \item Si el post-hoc de la ruta falla, prueba la siguiente ruta viable
+#'         (A/B -> no paramétrica; Friedman -> Kruskal; Kruskal <-> Dunn).
+#'         / If the post-hoc fails, the next viable route is tried.
 #' }
+#'
+#' El gráfico incluye una nota (caption) con la ruta usada en cada panel,
+#' por qué, ventajas, desventajas y alcance; puede quitarse con
+#' \code{+ ggplot2::labs(caption = NULL)}. CV y Power se calculan siempre a
+#' partir del ANOVA clásico.
+#'
+#' The plot includes a caption describing the route used in each panel, why,
+#' advantages, disadvantages and scope. CV and Power are always computed from
+#' the classic ANOVA fit.
 #'
 #' Los argumentos \code{orden_factor}, \code{grupo1_orden} y \code{grupo2_orden}
 #' aceptan vectores nombrados o no:
@@ -84,8 +87,18 @@
 #' @param test Método post-hoc: \code{"Duncan"} (default) o \code{"Tukey"} /
 #'   Post-hoc test: \code{"Duncan"} (default) or \code{"Tukey"}.
 #'
-#' @param var.equal Si TRUE usa ANOVA clásico; si FALSE activa Welch /
-#'   Logical. If TRUE uses classic ANOVA; if FALSE enables Welch path.
+#' @param var.equal Obsoleto desde v0.4.0: se mantiene por compatibilidad
+#'   pero ya no cambia el resultado; la ruta se elige automáticamente /
+#'   Deprecated since v0.4.0: kept for backward compatibility, ignored.
+#'
+#' @param np_test Post-hoc no paramétrico sin bloque: \code{"kruskal"}
+#'   (default, \code{agricolae::kruskal}) o \code{"dunn"} (Dunn, \code{rstatix}) /
+#'   Non-parametric post-hoc when there is no block.
+#'
+#' @param p.adj Ajuste de p-valores para Kruskal y Dunn (default
+#'   \code{"bonferroni"}; también \code{"holm"}, \code{"hochberg"},
+#'   \code{"BH"}, \code{"BY"}, \code{"fdr"}, \code{"none"}) /
+#'   P-value adjustment for Kruskal and Dunn comparisons.
 #'
 #' @param factor Nombre de la variable categórica principal /
 #'   Name of the main categorical variable (treatment).
@@ -123,8 +136,8 @@
 #' @param colores Vector de colores /
 #'   Color vector for factor levels.
 #'
-#' @return Lista con cuatro elementos /
-#'   A list with four elements:
+#' @return Lista con cinco elementos /
+#'   A list with five elements:
 #' \describe{
 #'   \item{\code{plot}}{Objeto ggplot2 con boxplots y anotaciones /
 #'     ggplot2 object with boxplots and annotations}
@@ -134,18 +147,23 @@
 #'     Displayed factor levels}
 #'   \item{\code{data}}{Datos procesados usados en el análisis /
 #'     Processed data used in the analysis}
+#'   \item{\code{stats}}{Diagnósticos por panel: \code{anova_p},
+#'     \code{shapiro_p}, \code{fligner_p}, \code{CV}, \code{Power},
+#'     \code{ruta} (A/B/C/D, o 0 si datos insuficientes), \code{metodo},
+#'     \code{p_ruta} (p de la prueba global usada) y \code{nota} /
+#'     Per-panel diagnostics including route, method, global p and notes}
 #' }
 #'
 #' #'
 #' @importFrom dplyr as_tibble filter mutate group_by summarise ungroup
 #'   distinct left_join bind_rows select pull across all_of any_of
-#'   relocate slice case_when if_else n_distinct recode
+#'   relocate slice case_when if_else n_distinct recode %>%
 #' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter geom_text labs
 #'   theme_bw theme element_text element_blank scale_color_manual
-#'   scale_y_continuous facet_grid
+#'   scale_y_continuous facet_grid coord_cartesian
 #' @importFrom stringr str_split_fixed str_trim str_split
 #' @importFrom tidyr separate pivot_wider unite
-#' @importFrom rlang sym set_names
+#' @importFrom rlang sym set_names .data
 #' @importFrom stats reformulate lm aov shapiro.test fligner.test
 #'   df.residual deviance setNames sd
 #' @importFrom grDevices hcl.colors
@@ -270,6 +288,7 @@
 #'
 #'
 #' # Example 5: Real Data pimiento_hibridacion
+#' \donttest{
 #'
 #' data(pimiento_hibridacion)
 #'
@@ -294,12 +313,15 @@
 #' colores = c("purple3", "green4","black", "red3")
 #' )$plot +
 #'   ggplot2::labs(col = "Semanas de hibridación")
+#' }
 #'
 #'
 #' @export
 agrobox <- function(data,
                     test      = c("Duncan", "Tukey"),
                     var.equal = TRUE,
+                    np_test   = c("kruskal", "dunn"),
+                    p.adj     = "bonferroni",
                     factor,
                     factor2   = NULL,
                     orden_factor  = NULL,
@@ -329,7 +351,19 @@ agrobox <- function(data,
   #   $data   - summary of the processed data used for analysis
   # =========================================================================
 
-  test <- match.arg(test)
+  test    <- match.arg(test)
+  np_test <- match.arg(np_test)
+  p.adj   <- match.arg(p.adj, c("bonferroni", "holm", "hochberg", "BH",
+                                "BY", "fdr", "none"))
+
+  # var.equal is kept for backward compatibility only. Since v0.4.0 the
+  # statistical route (A/B/C/D) is chosen automatically from the Shapiro-Wilk
+  # and Fligner-Killeen diagnostics, so this argument no longer changes results.
+  if (!missing(var.equal)) {
+    message("agrobox: 'var.equal' ya no se usa desde v0.4.0; la ruta estadistica ",
+            "se elige automaticamente (Shapiro + Fligner). / 'var.equal' is ",
+            "ignored since v0.4.0.")
+  }
 
   # -------------------------------------------------------------------------
   # HELPER: apply order and optional relabeling to a factor column.
@@ -343,9 +377,16 @@ agrobox <- function(data,
   # -------------------------------------------------------------------------
   aplicar_orden_labels <- function(x, orden_vec) {
 
+    x_orig <- x
     x <- as.character(x)
 
     if (is.null(orden_vec)) {
+      # Keep a meaningful default order: numeric values in numeric order
+      # (0, 50, 100 instead of 0, 100, 50) and factors in their own level order
+      if (is.numeric(x_orig))
+        return(factor(x, levels = as.character(sort(unique(x_orig)))))
+      if (is.factor(x_orig))
+        return(factor(x, levels = intersect(levels(x_orig), unique(x))))
       return(factor(x))
     }
 
@@ -361,6 +402,12 @@ agrobox <- function(data,
 
     niveles_originales <- names(orden_vec)
     labels_deseados    <- unname(orden_vec)
+
+    # Levels present in the data but not listed are excluded: say so
+    omitidos <- setdiff(unique(stats::na.omit(x)), niveles_originales)
+    if (length(omitidos) > 0)
+      message("agrobox: niveles no incluidos en el vector de orden (se excluyen ",
+              "del analisis): ", paste(omitidos, collapse = ", "))
 
     factor(x, levels = niveles_originales, labels = labels_deseados)
   }
@@ -501,39 +548,42 @@ agrobox <- function(data,
   data2 <- make_cluster_col(df)
 
   # -------------------------------------------------------------------------
-  # Games-Howell post-hoc test with compact letter display.
-  # Used when var.equal = FALSE and homoscedasticity fails.
-  # Returns NULL if any pairwise p-value is NA or any group is missing
-  # from the letter display, suppressing all letters for that cluster.
+  # Compact letter display from pairwise p-values (shared by Games-Howell
+  # and Dunn).
+  #
+  # multcompLetters() returns letter strings such as "a", "ab", "b". They are
+  # relabelled LETTER BY LETTER (never the whole string) so that the group
+  # with the highest mean receives "a", following the agricolae convention.
+  # (v0.3.0 relabelled whole strings, which turned "ab" into a new letter and
+  # produced wrong groupings.)
+  #
+  # Returns NULL if any p-value is NA or any treatment is missing a letter,
+  # so the caller can move on to the next viable route.
   # -------------------------------------------------------------------------
-  games_howell_letras <- function(datis2, formula_term, factor_name, variable_name) {
+  letras_desde_pvalores <- function(pvals, datis2, factor_name, variable_name) {
 
-    df_games <- tryCatch(
-      rstatix::games_howell_test(datis2, formula_term),
-      error = function(e) NULL
-    )
-    if (is.null(df_games)) return(NULL)
-
-    pvals <- dplyr::select(df_games, group1, group2, p.adj)
-
-    # If any pairwise comparison has NA p-value, the test is unreliable.
-    # Suppress all letters for this cluster rather than showing partial results.
+    if (is.null(pvals) || nrow(pvals) == 0) return(NULL)
     if (any(is.na(pvals$p.adj))) return(NULL)
 
-    grupos <- unique(c(df_games$group1, df_games$group2))
+    grupos <- unique(c(as.character(pvals$group1), as.character(pvals$group2)))
 
-    # Build full symmetric p-value matrix
+    # Full symmetric p-value matrix
     mat_full <- matrix(1,
                        nrow     = length(grupos),
                        ncol     = length(grupos),
                        dimnames = list(grupos, grupos))
-
     for (i in seq_len(nrow(pvals))) {
-      mat_full[pvals$group1[i], pvals$group2[i]] <- pvals$p.adj[i]
-      mat_full[pvals$group2[i], pvals$group1[i]] <- pvals$p.adj[i]
+      g1i <- as.character(pvals$group1[i])
+      g2i <- as.character(pvals$group2[i])
+      mat_full[g1i, g2i] <- pvals$p.adj[i]
+      mat_full[g2i, g1i] <- pvals$p.adj[i]
     }
 
-    letras <- multcompView::multcompLetters(mat_full < 0.05)
+    letras_vec <- tryCatch(
+      multcompView::multcompLetters(mat_full < 0.05)$Letters,
+      error = function(e) NULL
+    )
+    if (is.null(letras_vec)) return(NULL)
 
     means <- datis2 %>%
       dplyr::group_by(.data[[factor_name]]) %>%
@@ -541,39 +591,103 @@ agrobox <- function(data,
         medias = mean(.data[[variable_name]], na.rm = TRUE),
         .groups = "drop"
       ) %>%
+      dplyr::mutate(!!factor_name := as.character(.data[[factor_name]])) %>%
       dplyr::arrange(dplyr::desc(medias))
 
-    letras_vec <- letras$Letters
+    # Every treatment must have a letter; otherwise the display is incomplete
+    if (length(setdiff(means[[factor_name]], names(letras_vec))) > 0) return(NULL)
 
-    # If any group is missing from the letter display, the comparison is
-    # incomplete and statistically invalid. Suppress all letters.
-    grupos_faltantes <- setdiff(means[[factor_name]], names(letras_vec))
-    if (length(grupos_faltantes) > 0) return(NULL)
+    # Relabel letter by letter, in order of first appearance from the
+    # highest mean downwards
+    orden  <- means[[factor_name]]
+    vistos <- character(0)
+    for (g in orden) {
+      for (ch in strsplit(letras_vec[[g]], "")[[1]]) {
+        if (!ch %in% vistos) vistos <- c(vistos, ch)
+      }
+    }
+    mapa <- stats::setNames(letters[seq_along(vistos)], vistos)
 
-    niveles_letras <- unique(letras_vec)
-    nuevas_letras  <- stats::setNames(letters[seq_along(niveles_letras)],
-                                      niveles_letras)
-    letras_final   <- nuevas_letras[letras_vec[means[[factor_name]]]]
+    letras_final <- vapply(orden, function(g) {
+      paste(sort(unname(mapa[strsplit(letras_vec[[g]], "")[[1]]])), collapse = "")
+    }, character(1))
 
     means %>%
-      dplyr::mutate(groups = letras_final) %>%
+      dplyr::mutate(groups = unname(letras_final)) %>%
       dplyr::select(!!rlang::sym(factor_name), medias, groups)
+  }
+
+  # -------------------------------------------------------------------------
+  # Games-Howell post-hoc (route B). Always uses y ~ factor: Games-Howell
+  # cannot include block or factor2 terms.
+  # -------------------------------------------------------------------------
+  games_howell_letras <- function(datis2, factor_name, variable_name) {
+    df_games <- tryCatch(
+      rstatix::games_howell_test(
+        datis2, stats::reformulate(factor_name, response = variable_name)),
+      error = function(e) NULL
+    )
+    if (is.null(df_games)) return(NULL)
+    letras_desde_pvalores(dplyr::select(df_games, group1, group2, p.adj),
+                          datis2, factor_name, variable_name)
+  }
+
+  # -------------------------------------------------------------------------
+  # Dunn post-hoc (routes C/D when np_test = "dunn")
+  # -------------------------------------------------------------------------
+  dunn_letras <- function(datis2, factor_name, variable_name, p_adj) {
+    df_dunn <- tryCatch(
+      rstatix::dunn_test(
+        datis2, stats::reformulate(factor_name, response = variable_name),
+        p.adjust.method = p_adj),
+      error = function(e) NULL
+    )
+    if (is.null(df_dunn)) return(NULL)
+    letras_desde_pvalores(dplyr::select(df_dunn, group1, group2, p.adj),
+                          datis2, factor_name, variable_name)
+  }
+
+  # -------------------------------------------------------------------------
+  # Join agricolae letters (kruskal / friedman) onto the means table.
+  # agricolae returns ranks in its first column, so the displayed values are
+  # always the arithmetic means from means_tbl.
+  # -------------------------------------------------------------------------
+  unir_letras_agricolae <- function(ph, means_tbl, factor_name) {
+    if (is.null(ph) || is.null(ph$groups)) return(NULL)
+    gdf <- as.data.frame(ph$groups)
+    if (!"groups" %in% names(gdf)) names(gdf)[ncol(gdf)] <- "groups"
+    letras <- stats::setNames(trimws(as.character(gdf$groups)),
+                              trimws(rownames(gdf)))
+    out <- means_tbl %>%
+      dplyr::mutate(groups = unname(letras[.data[[factor_name]]])) %>%
+      dplyr::select(!!rlang::sym(factor_name), medias, groups)
+    if (any(is.na(out$groups))) return(NULL)
+    out
   }
 
   # -------------------------------------------------------------------------
   # Core statistical analysis for one cluster (facet panel).
   #
-  # Decision logic:
-  #   1. Shapiro-Wilk normality test on residuals
-  #      -> fails (p <= 0.05): return means only, no letters
-  #   2. var.equal = TRUE  (classic ANOVA path)
-  #      -> Fligner homoscedasticity test
-  #         fails: return means only, no letters
-  #         passes: ANOVA + Duncan or Tukey
-  #   3. var.equal = FALSE (Welch path)
-  #      -> Fligner passes: use ANOVA + Duncan / Tukey anyway
-  #      -> Fligner fails:  use Welch + Games-Howell letters
-  #         CV / Power reported only when ff_p > 0.01
+  # Goal: place post-hoc letters through a viable, defensible route.
+  #
+  #   1. Sufficient data?  (>= 2 treatments, >= 3 obs per treatment,
+  #                         non-constant data)  -> otherwise means only
+  #   2. Shapiro-Wilk on model residuals         -> normal / not normal
+  #   3. Fligner-Killeen (y ~ factor)            -> homogeneous / heterogeneous
+  #   4. Route:
+  #        A  normal + homogeneous    : ANOVA + Duncan / Tukey
+  #                                     (model includes block and factor2)
+  #        B  normal + heterogeneous  : Welch ANOVA + Games-Howell
+  #                                     (block / factor2 not considered)
+  #        C  not normal + homogeneous: Friedman if block (complete RCBD),
+  #                                     otherwise Kruskal-Wallis (np_test)
+  #        D  not normal + heterog.   : same tests as C, flagged with a note
+  #   5. Fallback: if the post-hoc of the chosen route fails (error / NA),
+  #      the next viable route is tried: A/B -> C/D, Friedman -> Kruskal,
+  #      Kruskal <-> Dunn. Means without letters only as a last resort,
+  #      always with an explicit note.
+  #
+  # CV and Power are always computed from the classic ANOVA fit.
   # -------------------------------------------------------------------------
   run_anova_for_group <- function(datis, formula_term, factor_name,
                                   variable_name, test_method) {
@@ -584,7 +698,15 @@ agrobox <- function(data,
                 shapiro_p = NA_real_,
                 fligner_p = NA_real_,
                 anova_p   = NA_real_,
-                metodo    = NA_character_)
+                p_ruta    = NA_real_,
+                ruta      = NA_character_,
+                metodo    = NA_character_,
+                nota      = NA_character_)
+
+    add_nota <- function(res, txt) {
+      res$nota <- if (is.na(res$nota)) txt else paste0(res$nota, "; ", txt)
+      res
+    }
 
     tryCatch({
 
@@ -597,7 +719,7 @@ agrobox <- function(data,
         dplyr::ungroup() %>%
         dplyr::mutate(sum_n = min(n, na.rm = TRUE))
 
-      # Means table (always computed regardless of ANOVA outcome)
+      # Means table (always computed regardless of route)
       means_tbl <- datis2 %>%
         dplyr::group_by(.data[[factor_name]]) %>%
         dplyr::summarise(
@@ -607,7 +729,7 @@ agrobox <- function(data,
         ) %>%
         dplyr::mutate(!!factor_name := as.character(.data[[factor_name]]))
 
-      # Minimum requirements to run ANOVA
+      # ---- Step 1: sufficient data ----------------------------------------
       cond_valid <- all(!is.infinite(datis2$sum_n)) &&
         all(!is.na(datis2$sum_n))                   &&
         all(datis2$sum_n >= 3)                       &&
@@ -618,7 +740,7 @@ agrobox <- function(data,
 
       if (!cond_valid) {
         warning("ANOVA skipped for cluster '", unique(datis$cluster),
-                "': insufficient data.")
+                "': insufficient data.", call. = FALSE)
         res$shapiro_p <- tryCatch(
           stats::shapiro.test(
             stats::residuals(
@@ -637,6 +759,9 @@ agrobox <- function(data,
           )$p.value,
           error = function(e) NA_real_
         )
+        res$ruta   <- "0"
+        res$metodo <- "-"
+        res <- add_nota(res, "datos insuficientes (se requieren >= 2 tratamientos y >= 3 obs. por tratamiento)")
         res$oti <- dplyr::mutate(means_tbl, groups = NA_character_)
         return(res)
       }
@@ -665,7 +790,7 @@ agrobox <- function(data,
       res$fligner_p <- ff_p
       res$anova_p   <- anova_p
 
-      # Helper: extract post-hoc groups from agricolae output
+      # Helper: extract post-hoc groups from agricolae output (Duncan / Tukey)
       extract_ph_groups <- function(ph, factor_name, means_tbl) {
         if (!is.null(ph) && !is.null(ph$groups)) {
           gdf <- as.data.frame(ph$groups)
@@ -684,12 +809,17 @@ agrobox <- function(data,
       compute_cv_power <- function(aov_fit, datis2, variable_name, factor_name) {
         df_res      <- stats::df.residual(aov_fit)
         MSerror     <- stats::deviance(aov_fit) / df_res
+        # abs(): CV is defined on the magnitude of the mean (negative responses)
         cv_val      <- sqrt(MSerror) /
-          mean(datis2[[variable_name]], na.rm = TRUE) * 100
+          abs(mean(datis2[[variable_name]], na.rm = TRUE)) * 100
 
+        # Partial eta^2 = SS_factor / (SS_factor + SS_residual).
+        # Identical to the classic eta^2 in a one-way model; with block or
+        # factor2 it no longer counts their SS against the treatment effect.
         ss_table    <- summary(aov_fit)[[1]]
+        ss_res      <- utils::tail(ss_table$`Sum Sq`, 1)
         eta2        <- ss_table$`Sum Sq`[1] /
-          sum(ss_table$`Sum Sq`, na.rm = TRUE)
+          (ss_table$`Sum Sq`[1] + ss_res)
         effect_size <- sqrt(eta2 / (1 - eta2))
         k           <- length(unique(datis2[[factor_name]]))
         n_per_group <- nrow(datis2) / k
@@ -705,77 +835,167 @@ agrobox <- function(data,
         list(cv = cv_val, power = power_val)
       }
 
-      # --- Step 1: normality gate ---
-      if (is.na(ss_p) || ss_p <= 0.05) {
-        res$oti <- dplyr::mutate(means_tbl, groups = NA_character_)
-        return(res)
+      # CV and Power: always reported (from the classic ANOVA fit)
+      stats_out <- tryCatch(
+        compute_cv_power(aov_fit, datis2, variable_name, factor_name),
+        error = function(e) list(cv = NA_real_, power = NA_real_)
+      )
+      res$cv    <- stats_out$cv
+      res$power <- stats_out$power
+
+      has_bloque  <- !is.null(bloque)  && bloque  %in% names(datis2)
+      has_factor2 <- !is.null(factor2) && factor2 %in% names(datis2)
+
+      # ---- Steps 2-3: diagnostics define the route -------------------------
+      # NA in a diagnostic is treated as "assumption not met" (safer route).
+      es_normal   <- !is.na(ss_p) && ss_p > 0.05
+      es_homog    <- !is.na(ff_p) && ff_p > 0.05
+      ruta_diag   <- if (es_normal && es_homog) "A" else
+        if (es_normal)             "B" else
+          if (es_homog)              "C" else "D"
+
+      # ---- Route intentos ---------------------------------------------------
+      intento_A <- function() {
+        ph <- tryCatch(
+          if (test_method == "Tukey") {
+            agricolae::HSD.test(lm_fit, factor_name, group = TRUE)
+          } else {
+            agricolae::duncan.test(lm_fit, factor_name, group = TRUE)
+          },
+          error = function(e) NULL
+        )
+        if (is.null(ph) || is.null(ph$groups)) return(NULL)
+        oti <- extract_ph_groups(ph, factor_name, means_tbl)
+        if (any(is.na(oti$groups))) return(NULL)
+        list(oti = oti, p = anova_p,
+             metodo = paste0("ANOVA + ", test_method), nota = NA_character_)
       }
 
-      # --- Step 2: var.equal = TRUE (classic ANOVA) ---
-      if (var.equal) {
+      intento_B <- function() {
+        oti <- games_howell_letras(datis2, factor_name, variable_name)
+        if (is.null(oti)) return(NULL)
+        welch_p <- tryCatch(
+          stats::oneway.test(
+            stats::reformulate(factor_name, response = variable_name),
+            data = datis2, var.equal = FALSE)$p.value,
+          error = function(e) NA_real_
+        )
+        nt <- c(if (has_bloque)  "bloque no considerado en Games-Howell",
+                if (has_factor2) "factor2 no considerado en Games-Howell")
+        list(oti = oti, p = welch_p, metodo = "Welch + Games-Howell",
+             nota = if (length(nt)) paste(nt, collapse = "; ") else NA_character_)
+      }
 
-        if (is.na(ff_p) || ff_p <= 0.05) {
-          res$oti <- dplyr::mutate(means_tbl, groups = NA_character_)
+      intento_friedman <- function() {
+        if (!has_bloque) return(NULL)
+        # One value per treatment x block (replicates / factor2 averaged)
+        agg <- datis2 %>%
+          dplyr::group_by(.data[[bloque]], .data[[factor_name]]) %>%
+          dplyr::summarise(y_ = mean(.data[[variable_name]], na.rm = TRUE),
+                           .groups = "drop") %>%
+          dplyr::mutate(dplyr::across(dplyr::all_of(c(bloque, factor_name)),
+                                      as.character))
+        k_trat <- length(unique(agg[[factor_name]]))
+        completos <- agg %>%
+          dplyr::group_by(.data[[bloque]]) %>%
+          dplyr::summarise(nt = dplyr::n_distinct(.data[[factor_name]]),
+                           .groups = "drop") %>%
+          dplyr::filter(nt == k_trat) %>%
+          dplyr::pull(1)
+        n_excl <- length(unique(agg[[bloque]])) - length(completos)
+        agg <- dplyr::filter(agg, .data[[bloque]] %in% completos)
+        if (length(completos) < 2) return(NULL)
+
+        ph <- tryCatch(
+          agricolae::friedman(agg[[bloque]], agg[[factor_name]], agg$y_,
+                              group = TRUE),
+          error = function(e) NULL
+        )
+        oti <- unir_letras_agricolae(ph, means_tbl, factor_name)
+        if (is.null(oti)) return(NULL)
+        # agricolae::friedman() has no p-value adjustment for its pairwise
+        # comparisons, so they are protected Fisher-style: if the global
+        # Friedman test is not significant, all treatments share "a".
+        fr_p <- ph$statistics$p.chisq
+        protegido <- !is.na(fr_p) && fr_p > 0.05
+        if (protegido) oti$groups <- "a"
+        nt <- c(if (protegido)
+          "Friedman global no significativo: sin diferencias entre tratamientos",
+          if (any(duplicated(datis2[, c(bloque, factor_name)])))
+            "replicas por tratamiento x bloque promediadas",
+          if (n_excl > 0) paste0(n_excl, " bloque(s) incompleto(s) excluido(s)"),
+          if (has_factor2) "factor2 no considerado en Friedman")
+        list(oti = oti, p = ph$statistics$p.chisq, metodo = "Friedman",
+             nota = if (length(nt)) paste(nt, collapse = "; ") else NA_character_)
+      }
+
+      kw_p <- function() tryCatch(
+        stats::kruskal.test(
+          stats::reformulate(factor_name, response = variable_name),
+          data = datis2)$p.value,
+        error = function(e) NA_real_
+      )
+
+      intento_kruskal <- function() {
+        ph <- tryCatch(
+          agricolae::kruskal(datis2[[variable_name]],
+                             as.character(datis2[[factor_name]]),
+                             p.adj = p.adj, group = TRUE),
+          error = function(e) NULL
+        )
+        oti <- unir_letras_agricolae(ph, means_tbl, factor_name)
+        if (is.null(oti)) return(NULL)
+        nt <- c(if (has_bloque)  "bloque no considerado en Kruskal-Wallis",
+                if (has_factor2) "factor2 no considerado en Kruskal-Wallis")
+        list(oti = oti, p = kw_p(), metodo = "Kruskal-Wallis",
+             nota = if (length(nt)) paste(nt, collapse = "; ") else NA_character_)
+      }
+
+      intento_dunn <- function() {
+        oti <- dunn_letras(datis2, factor_name, variable_name, p.adj)
+        if (is.null(oti)) return(NULL)
+        nt <- c(if (has_bloque)  "bloque no considerado en Kruskal-Wallis/Dunn",
+                if (has_factor2) "factor2 no considerado en Kruskal-Wallis/Dunn")
+        list(oti = oti, p = kw_p(), metodo = "Kruskal-Wallis + Dunn",
+             nota = if (length(nt)) paste(nt, collapse = "; ") else NA_character_)
+      }
+
+      # Non-parametric chain: Friedman (if block) -> chosen np_test -> the other
+      np_cadena <- c(if (has_bloque) "friedman",
+                     if (np_test == "dunn") c("dunn", "kruskal") else c("kruskal", "dunn"))
+
+      cadena <- switch(ruta_diag,
+                       A = c("A", np_cadena),
+                       B = c("B", np_cadena),
+                       C = np_cadena,
+                       D = np_cadena)
+
+      intentos <- list(A = intento_A, B = intento_B, friedman = intento_friedman,
+                       kruskal = intento_kruskal, dunn = intento_dunn)
+
+      # ---- Step 4-5: run the chain until letters are obtained -------------
+      for (paso in cadena) {
+        out <- tryCatch(intentos[[paso]](), error = function(e) NULL)
+        if (!is.null(out)) {
+          res$oti    <- out$oti
+          res$p_ruta <- out$p
+          res$metodo <- out$metodo
+          res$ruta   <- ruta_diag
+          if (paso != cadena[1]) {
+            res <- add_nota(res, paste0("ruta de respaldo: el post-hoc previsto (",
+                                        cadena[1], ") no pudo calcularse"))
+          }
+          if (ruta_diag == "D") res <- add_nota(res, "varianzas heterogeneas")
+          if (!is.na(out$nota)) res <- add_nota(res, out$nota)
           return(res)
         }
-
-        ph <- tryCatch(
-          if (test_method == "Tukey") {
-            agricolae::HSD.test(lm_fit, factor_name, group = TRUE)
-          } else {
-            agricolae::duncan.test(lm_fit, factor_name, group = TRUE)
-          },
-          error = function(e) NULL
-        )
-
-        stats_out  <- compute_cv_power(aov_fit, datis2, variable_name, factor_name)
-        res$cv     <- stats_out$cv
-        res$power  <- stats_out$power
-        res$oti    <- extract_ph_groups(ph, factor_name, means_tbl)
-        res$metodo <- "ANOVA"
-        return(res)
       }
 
-      # --- Step 3: var.equal = FALSE ---
-
-      # Scenario A: homoscedasticity holds -> use standard ANOVA anyway
-      if (!is.na(ff_p) && ff_p > 0.05) {
-
-        ph <- tryCatch(
-          if (test_method == "Tukey") {
-            agricolae::HSD.test(lm_fit, factor_name, group = TRUE)
-          } else {
-            agricolae::duncan.test(lm_fit, factor_name, group = TRUE)
-          },
-          error = function(e) NULL
-        )
-
-        stats_out  <- compute_cv_power(aov_fit, datis2, variable_name, factor_name)
-        res$cv     <- stats_out$cv
-        res$power  <- stats_out$power
-        res$oti    <- extract_ph_groups(ph, factor_name, means_tbl)
-        res$metodo <- "ANOVA"
-        return(res)
-      }
-
-      # Scenario B: heteroscedasticity -> Welch + Games-Howell
-      groups_df <- games_howell_letras(datis2, formula_term,
-                                       factor_name, variable_name)
-
-      if (is.null(groups_df)) {
-        res$oti <- dplyr::mutate(means_tbl, groups = NA_character_)
-        return(res)
-      }
-
-      # Report CV / Power only when ff_p is not extremely small (> 0.01)
-      if (!is.na(ff_p) && ff_p > 0.01) {
-        stats_out <- compute_cv_power(aov_fit, datis2, variable_name, factor_name)
-        res$cv    <- stats_out$cv
-        res$power <- stats_out$power
-      }
-
-      res$oti    <- groups_df
-      res$metodo <- "Welch"
+      # Last resort: means without letters, with explicit reason
+      res$ruta   <- ruta_diag
+      res$metodo <- "-"
+      res <- add_nota(res, "ningun post-hoc pudo calcularse; se muestran solo medias")
+      res$oti <- dplyr::mutate(means_tbl, groups = NA_character_)
       return(res)
 
     }, error = function(e) {
@@ -795,6 +1015,7 @@ agrobox <- function(data,
       res$oti    <- if (!is.null(means_tbl2))
         dplyr::mutate(means_tbl2, groups = NA_character_) else NULL
       res$metodo <- "-"
+      res$nota   <- paste0("error inesperado: ", conditionMessage(e))
       return(res)
     })
   }
@@ -819,7 +1040,9 @@ agrobox <- function(data,
   # -------------------------------------------------------------------------
   # Loop over clusters: run ANOVA / Welch for each facet panel
   # -------------------------------------------------------------------------
-  clusters   <- unique(data2$cluster)
+  # Level order (not order of appearance) so that $tabla columns and $stats
+  # rows follow grupo1_orden / grupo2_orden, like the facets do
+  clusters   <- levels(droplevels(factor(data2$cluster)))
   oti_list   <- list()
   cv_list    <- list()
   power_list <- list()
@@ -839,7 +1062,10 @@ agrobox <- function(data,
           shapiro_p = res_anova$shapiro_p,
           fligner_p = res_anova$fligner_p,
           anova_p   = res_anova$anova_p,
-          metodo    = res_anova$metodo
+          metodo    = res_anova$metodo,
+          ruta      = res_anova$ruta,
+          p_ruta    = res_anova$p_ruta,
+          nota      = res_anova$nota
         )
     } else {
       empty_cols <- c("groups", factor)
@@ -882,8 +1108,12 @@ agrobox <- function(data,
   min_val <- suppressWarnings(min(data2[[variable]], na.rm = TRUE))
 
   if (is.null(lim_sup))
+    # max + 20% of |max| (= max * 1.2 for positive data, but stays above
+    # the maximum when the response is negative); if max <= 0, 30% of range
     lim_sup <- ifelse(is.finite(max_val) && !is.na(max_val),
-                      max_val * 1.2, NA_real_)
+                      if (isTRUE(max_val <= 0)) max_val + 0.3 * (max_val - min_val)
+                      else max_val + 0.2 * abs(max_val),
+                      NA_real_)
   if (is.null(lim_inf))
     lim_inf <- ifelse(is.finite(min_val) && !is.na(min_val),
                       ifelse(min_val <= 0, min_val * 2, min_val * 0.7),
@@ -937,9 +1167,13 @@ agrobox <- function(data,
   }
 
   # Add faceting when estructura is provided
-  if (!is.null(estructura) && nzchar(estructura))
+  # "row~" (documented) is not a valid facet formula: complete it as "row~."
+  if (!is.null(estructura) && nzchar(estructura)) {
+    estructura_facet <- if (has_name(grupe1) && !has_name(grupe2))
+      paste0(grupe1, " ~ .") else estructura
     p_base <- p_base +
-    ggplot2::facet_grid(estructura, switch = "y", space = "free")
+      ggplot2::facet_grid(estructura_facet, switch = "y", space = "free")
+  }
 
   # -------------------------------------------------------------------------
   # Reconstruct grouping columns in oti_merged so that geom_text can be
@@ -960,41 +1194,19 @@ agrobox <- function(data,
   if (!"cluster" %in% names(oti_merged)) {
     oti_merged2 <- oti_merged
 
-  } else if (!is.na(g1) && !is.na(g2)) {
+  } else if (!is.na(g1) || !is.na(g2)) {
+    # Recover the grouping columns from data2 by joining on 'cluster'
+    # instead of splitting the cluster string on "_": labels that contain
+    # "_" (e.g. "Sitio_Norte") or non-ASCII characters are kept intact.
+    g_cols <- stats::na.omit(c(g1, g2))
+    mapa_cluster <- data2 %>%
+      dplyr::distinct(dplyr::across(dplyr::all_of(c("cluster", g_cols)))) %>%
+      dplyr::mutate(cluster = as.character(cluster))
     oti_merged2 <- oti_merged %>%
-      tidyr::separate(cluster,
-                      into   = c(g1, g2),
-                      sep    = "_",
-                      remove = FALSE,
-                      extra  = "merge",
-                      fill   = "right") %>%
-      dplyr::mutate(!!g1 := as.character(.data[[g1]]),
-                    !!g2 := as.character(.data[[g2]]))
-    oti_merged2 <- restore_levels(oti_merged2, g1, data2)
-    oti_merged2 <- restore_levels(oti_merged2, g2, data2)
-
-  } else if (!is.na(g1) && is.na(g2)) {
-    oti_merged2 <- oti_merged %>%
-      tidyr::separate(cluster,
-                      into   = c(g1, "rest"),
-                      sep    = "_",
-                      remove = FALSE,
-                      extra  = "merge",
-                      fill   = "right") %>%
-      dplyr::select(-dplyr::any_of("rest")) %>%
-      dplyr::mutate(!!g1 := as.character(.data[[g1]]))
-    oti_merged2 <- restore_levels(oti_merged2, g1, data2)
-
-  } else if (is.na(g1) && !is.na(g2)) {
-    oti_merged2 <- oti_merged %>%
-      dplyr::mutate(
-        .tmp = stringr::str_split(cluster, "_"),
-        !!g2 := vapply(.tmp, function(x) utils::tail(x, 1),
-                       FUN.VALUE = character(1))
-      ) %>%
-      dplyr::select(-.tmp) %>%
-      dplyr::mutate(!!g2 := as.character(.data[[g2]]))
-    oti_merged2 <- restore_levels(oti_merged2, g2, data2)
+      dplyr::mutate(cluster = as.character(cluster)) %>%
+      dplyr::select(-dplyr::any_of(g_cols)) %>%
+      dplyr::left_join(mapa_cluster, by = "cluster")
+    for (g in g_cols) oti_merged2 <- restore_levels(oti_merged2, g, data2)
 
   } else {
     oti_merged2 <- oti_merged
@@ -1019,6 +1231,9 @@ agrobox <- function(data,
       fligner_lbl = ifelse(!is.na(fligner_p),
                            formatC(fligner_p, digits = 3, format = "f"),
                            NA_character_),
+      metodo = ifelse(!is.na(ruta) & ruta %in% c("A", "B", "C", "D") &
+                        !is.na(metodo) & metodo != "-",
+                      paste0(ruta, " - ", metodo), metodo),
       corner_label = dplyr::case_when(
         !is.na(CV) | !is.na(Power) ~ paste0(
           "Metodo: ", ifelse(is.na(metodo), "-", metodo),
@@ -1068,7 +1283,101 @@ agrobox <- function(data,
     )
 
   if (!is.na(lim_inf) && !is.na(lim_sup))
-    p1 <- p1 + ggplot2::scale_y_continuous(limits = c(lim_inf, lim_sup))
+    # coord_cartesian zooms without removing observations (scale limits
+    # dropped points outside the range and altered the boxplots)
+    p1 <- p1 + ggplot2::coord_cartesian(ylim = c(lim_inf, lim_sup))
+
+  # -------------------------------------------------------------------------
+  # Method note (caption): which statistical route was used in each panel,
+  # why, advantages, disadvantages and scope.
+  # -------------------------------------------------------------------------
+  texto_ruta <- function(ruta, metodo) {
+    padj_txt <- paste0("ajuste de p: ", p.adj)
+    f2_txt   <- if (!is.null(factor2))
+      "; con factor2, las letras corresponden al efecto principal del factor (promediado sobre factor2)" else ""
+    if (identical(ruta, "0")) {
+      return(c(por = "datos insuficientes (se requieren >= 2 tratamientos y >= 3 obs. por tratamiento).",
+               ven = NA, des = NA, alc = "solo se muestran medias descriptivas."))
+    }
+    if (is.na(metodo) || metodo == "-") {
+      return(c(por = "ning\u00fan post-hoc pudo calcularse con los datos del panel.",
+               ven = NA, des = NA, alc = "solo se muestran medias descriptivas."))
+    }
+    por_np <- if (identical(ruta, "C"))
+      "residuos no normales (Shapiro p <= 0.05) con varianzas homog\u00e9neas (Fligner p > 0.05): se usa una prueba basada en rangos."
+    else if (identical(ruta, "D"))
+      "residuos no normales (Shapiro p <= 0.05) y varianzas heterog\u00e9neas (Fligner p <= 0.05): se usa una prueba basada en rangos, la opci\u00f3n m\u00e1s robusta disponible."
+    else
+      "el post-hoc param\u00e9trico previsto no pudo calcularse; se usa una prueba basada en rangos como respaldo."
+    des_D <- if (identical(ruta, "D"))
+      " Con varianzas distintas, una diferencia puede reflejar dispersi\u00f3n y no solo posici\u00f3n." else ""
+
+    if (startsWith(metodo, "ANOVA")) {
+      c(por = "residuos normales (Shapiro p > 0.05) y varianzas homog\u00e9neas (Fligner p > 0.05): se cumplen los supuestos del ANOVA.",
+        ven = "es la ruta con mayor potencia; usa el error del modelo completo (incluye bloque y factor2 si se indicaron).",
+        des = if (test == "Tukey")
+          "Tukey controla el error por familia de comparaciones; es conservadora cuando hay muchos tratamientos."
+        else
+          "Duncan es m\u00e1s liberal que Tukey: detecta m\u00e1s diferencias, con mayor riesgo de falsos positivos.",
+        alc = paste0("las letras comparan medias aritm\u00e9ticas", f2_txt, "."))
+    } else if (startsWith(metodo, "Welch")) {
+      c(por = "residuos normales (Shapiro p > 0.05) pero varianzas heterog\u00e9neas (Fligner p <= 0.05): el ANOVA cl\u00e1sico no es v\u00e1lido.",
+        ven = "Welch y Games-Howell no asumen varianzas iguales y toleran tama\u00f1os de muestra desiguales.",
+        des = "menor potencia con pocas repeticiones; no incorpora bloque ni factor2.",
+        alc = "las letras comparan medias de tratamientos; si hubo bloque o factor2, la comparaci\u00f3n los ignora.")
+    } else if (metodo == "Friedman") {
+      c(por = paste(sub("\\.$", "", por_np), "y hay bloques: Friedman compara tratamientos dentro de cada bloque."),
+        ven = "respeta el dise\u00f1o en bloques sin asumir normalidad.",
+        des = paste0("usa un valor por tratamiento \u00d7 bloque (promedia r\u00e9plicas) y excluye bloques incompletos; menor potencia que el ANOVA.", des_D),
+        alc = "las letras comparan sumas de rangos dentro de bloques, no medias; si Friedman global no es significativo, todos comparten la letra a; las medias mostradas son descriptivas.")
+    } else {
+      c(por = por_np,
+        ven = "no asume normalidad y es robusta a valores at\u00edpicos.",
+        des = paste0("menor potencia que el ANOVA cuando los datos s\u00ed son normales; ", padj_txt, ".", des_D),
+        alc = "las letras comparan rangos (distribuciones), no medias; las medias mostradas son descriptivas.")
+    }
+  }
+
+  resumen_rutas <- oti_merged %>%
+    dplyr::distinct(cluster, ruta, metodo, nota) %>%
+    dplyr::arrange(match(cluster, levels(factor(data2$cluster)))) %>%
+    dplyr::mutate(
+      respaldo = !is.na(nota) & grepl("ruta de respaldo", nota, fixed = TRUE),
+      clave    = paste(ruta, metodo, sep = "|")
+    )
+
+  bloques_txt <- character(0)
+  for (cl in unique(resumen_rutas$clave)) {
+    filas   <- dplyr::filter(resumen_rutas, clave == cl)
+    r_ruta  <- filas$ruta[1]
+    r_met   <- filas$metodo[1]
+    tx      <- texto_ruta(r_ruta, r_met)
+    titulo_r <- if (identical(r_ruta, "0") || is.na(r_met) || r_met == "-")
+      "Sin letras" else paste0("Ruta ", r_ruta, " - ", r_met)
+    if (any(filas$respaldo)) titulo_r <- paste0(titulo_r, " (ruta de respaldo)")
+    if (!single_A)
+      titulo_r <- paste0(titulo_r, "  [", paste(filas$cluster, collapse = ", "), "]")
+    cuerpo <- paste0("Por qu\u00e9: ", tx[["por"]],
+                     if (!is.na(tx[["ven"]])) paste0(" Ventajas: ", tx[["ven"]]) else "",
+                     if (!is.na(tx[["des"]])) paste0(" Desventajas: ", tx[["des"]]) else "",
+                     " Alcance: ", tx[["alc"]])
+    bloques_txt <- c(bloques_txt,
+                     paste0(titulo_r, "\n",
+                            paste(strwrap(cuerpo, width = 105), collapse = "\n")))
+  }
+  if (any(!is.na(resumen_rutas$metodo) &
+          !startsWith(ifelse(is.na(resumen_rutas$metodo), "", resumen_rutas$metodo), "ANOVA") &
+          resumen_rutas$metodo != "-"))
+    bloques_txt <- c(bloques_txt,
+                     "CV y Power se calculan del ANOVA cl\u00e1sico como referencia en todas las rutas.")
+
+  nota_metodo <- paste(bloques_txt, collapse = "\n\n")
+
+  p1 <- p1 +
+    ggplot2::labs(caption = nota_metodo) +
+    ggplot2::theme(plot.caption = ggplot2::element_text(hjust = 0, size = 7.5,
+                                                        colour = "grey25",
+                                                        lineheight = 1.05))
 
   # -------------------------------------------------------------------------
   # Summary table: means + letters + ANOVA significance + CV + Power
@@ -1111,7 +1420,8 @@ agrobox <- function(data,
     wide_main <- oti_labeled %>%
       dplyr::select(dplyr::all_of(factor_col), col_name, celda) %>%
       dplyr::distinct() %>%
-      tidyr::pivot_wider(names_from = col_name, values_from = celda)
+      tidyr::pivot_wider(names_from = col_name, values_from = celda,
+                         values_fill = "")
 
     wide_main <- wide_main[order(wide_main[[factor_col]]), ]
     n_trat    <- dplyr::n_distinct(wide_main[[factor_col]])
@@ -1128,7 +1438,7 @@ agrobox <- function(data,
         dplyr::mutate(sig = dplyr::case_when(
           is.na(CV)         ~ "-",
           is.na(anova_p)    ~ "",
-          metodo == "Welch" ~ "-",
+          is.na(metodo) | !startsWith(metodo, "ANOVA") ~ "-",
           anova_p < 0.001   ~ "***",
           anova_p < 0.01    ~ "**",
           anova_p < 0.05    ~ "*",
@@ -1171,13 +1481,20 @@ agrobox <- function(data,
 
     # Format multi-part column names (grupe1_grupe2) for LaTeX makecell
     enc <- names(tabla_final2)
-    enc[-1] <- vapply(enc[-1], function(x) {
-      if (!grepl("_", x)) return(x)
-      partes <- strsplit(x, "_", fixed = TRUE)[[1]]
-      sprintf("\\makecell{%s \\\\ %s}",
-              partes[1],
-              paste(partes[-1], collapse = "_"))
-    }, character(1))
+    # Only when there are two grouping variables; the two parts are taken
+    # from data2 (not by splitting on "_", which breaks labels with "_")
+    if (has_name(grupe1) && has_name(grupe2) &&
+        all(c(grupe1, grupe2) %in% names(data2))) {
+      mapa_enc <- data2 %>%
+        dplyr::distinct(cluster, .data[[grupe1]], .data[[grupe2]]) %>%
+        dplyr::mutate(cluster = as.character(cluster))
+      enc[-1] <- vapply(enc[-1], function(x) {
+        fila <- mapa_enc[mapa_enc$cluster == x, , drop = FALSE]
+        if (nrow(fila) != 1) return(x)
+        sprintf("\\makecell{%s \\\\ %s}",
+                as.character(fila[[grupe1]]), as.character(fila[[grupe2]]))
+      }, character(1))
+    }
     names(tabla_final2) <- enc
 
     tabla_final2
@@ -1218,8 +1535,13 @@ agrobox <- function(data,
       fligner_p = dplyr::first(fligner_p),
       CV        = dplyr::first(CV),
       Power     = dplyr::first(Power),
+      ruta      = dplyr::first(ruta),
+      metodo    = dplyr::first(metodo),
+      p_ruta    = dplyr::first(p_ruta),
+      nota      = dplyr::first(nota),
       .groups = "drop"
-    )
+    ) %>%
+    dplyr::arrange(match(cluster, clusters))
 
   list(
     plot   = p1,
@@ -1229,4 +1551,3 @@ agrobox <- function(data,
     stats  = anova_summary
   )
 }
-

@@ -33,3 +33,4 @@
 # Otros del sistema
 ^\.DS_Store$
 ^LICENSE\.md$
+^enviar_cran\.R$

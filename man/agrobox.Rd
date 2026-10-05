@@ -9,6 +9,8 @@ agrobox(
   data,
   test = c("Duncan", "Tukey"),
   var.equal = TRUE,
+  np_test = c("kruskal", "dunn"),
+  p.adj = "bonferroni",
   factor,
   factor2 = NULL,
   orden_factor = NULL,
@@ -30,8 +32,18 @@ A data frame containing the experimental data.}
 \item{test}{Método post-hoc: \code{"Duncan"} (default) o \code{"Tukey"} /
 Post-hoc test: \code{"Duncan"} (default) or \code{"Tukey"}.}
 
-\item{var.equal}{Si TRUE usa ANOVA clásico; si FALSE activa Welch /
-Logical. If TRUE uses classic ANOVA; if FALSE enables Welch path.}
+\item{var.equal}{Obsoleto desde v0.4.0: se mantiene por compatibilidad
+pero ya no cambia el resultado; la ruta se elige automáticamente /
+Deprecated since v0.4.0: kept for backward compatibility, ignored.}
+
+\item{np_test}{Post-hoc no paramétrico sin bloque: \code{"kruskal"}
+(default, \code{agricolae::kruskal}) o \code{"dunn"} (Dunn, \code{rstatix}) /
+Non-parametric post-hoc when there is no block.}
+
+\item{p.adj}{Ajuste de p-valores para Kruskal y Dunn (default
+\code{"bonferroni"}; también \code{"holm"}, \code{"hochberg"},
+\code{"BH"}, \code{"BY"}, \code{"fdr"}, \code{"none"}) /
+P-value adjustment for Kruskal and Dunn comparisons.}
 
 \item{factor}{Nombre de la variable categórica principal /
 Name of the main categorical variable (treatment).}
@@ -70,8 +82,8 @@ Lower y-axis limit.}
 Color vector for factor levels.}
 }
 \value{
-Lista con cuatro elementos /
-  A list with four elements:
+Lista con cinco elementos /
+  A list with five elements:
 \describe{
   \item{\code{plot}}{Objeto ggplot2 con boxplots y anotaciones /
     ggplot2 object with boxplots and annotations}
@@ -81,6 +93,11 @@ Lista con cuatro elementos /
     Displayed factor levels}
   \item{\code{data}}{Datos procesados usados en el análisis /
     Processed data used in the analysis}
+  \item{\code{stats}}{Diagnósticos por panel: \code{anova_p},
+    \code{shapiro_p}, \code{fligner_p}, \code{CV}, \code{Power},
+    \code{ruta} (A/B/C/D, o 0 si datos insuficientes), \code{metodo},
+    \code{p_ruta} (p de la prueba global usada) y \code{nota} /
+    Per-panel diagnostics including route, method, global p and notes}
 }
 
 #'
@@ -98,43 +115,46 @@ variables and automatic selection of the statistical method based on normality
 (Shapiro-Wilk) and homoscedasticity (Fligner-Killeen) tests.
 
 
-La función aplica la siguiente lógica de decisión para cada panel (cluster):
+Objetivo: colocar letras de comparación múltiple mediante una ruta
+estadística viable y defendible. Para cada panel (cluster) la función:
 
-The function applies the following decision logic for each facet panel (cluster):
+Goal: place multiple-comparison letters through a viable, defensible
+statistical route. For each facet panel (cluster) the function:
 
 \enumerate{
-  \item Prueba de Shapiro-Wilk sobre los residuos del ANOVA. Si la normalidad falla
-        (p <= 0.05), solo se muestran las medias sin letras.
-
-        Shapiro-Wilk test on ANOVA residuals. If normality fails (p <= 0.05),
-        only means are shown with no letters.
-
-  \item Si \code{var.equal = TRUE} (ANOVA clásico): se aplica la prueba de
-        Fligner-Killeen. Si falla la homogeneidad, solo se muestran medias.
-        Si pasa, se usa ANOVA + post-hoc Duncan o Tukey.
-
-        If \code{var.equal = TRUE} (classic ANOVA path): Fligner-Killeen test is
-        applied. If homoscedasticity fails, only means are shown. Otherwise,
-        ANOVA + Duncan or Tukey post-hoc is used.
-
-  \item Si \code{var.equal = FALSE} (ruta Welch):
+  \item Verifica datos suficientes (>= 2 tratamientos, >= 3 observaciones
+        por tratamiento, datos no constantes). Si no, solo muestra medias.
+        / Checks for sufficient data; otherwise only means are shown.
+  \item Evalúa normalidad de residuos (Shapiro-Wilk) y homogeneidad de
+        varianzas (Fligner-Killeen). / Tests residual normality and
+        homoscedasticity.
+  \item Elige la ruta / Chooses the route:
     \itemize{
-      \item Si Fligner pasa (p > 0.05): se usa ANOVA estándar + Duncan o Tukey.
-      \item Si Fligner falla: se usa Welch + Games-Howell.
-      \item CV y Power solo se reportan cuando ff_p > 0.01.
-      \item Si alguna comparación tiene p-valor NA o falta algún grupo en las
-            letras, se eliminan las letras para todo el cluster.
+      \item \strong{A} normal + homogéneo: ANOVA (con bloque y
+            \code{factor2} si se indican) + Duncan o Tukey.
+      \item \strong{B} normal + heterogéneo: ANOVA de Welch + Games-Howell
+            (bloque y \code{factor2} no se consideran).
+      \item \strong{C} no normal + homogéneo: Friedman si hay bloque
+            (DBCA completo; réplicas promediadas, bloques incompletos
+            excluidos; letras protegidas por el Friedman global), si no
+            Kruskal-Wallis con letras de \code{agricolae::kruskal}
+            (\code{np_test = "kruskal"}) o Dunn (\code{np_test = "dunn"}).
+      \item \strong{D} no normal + heterogéneo: mismas pruebas que C,
+            con una nota de varianzas heterogéneas.
     }
-
-    If \code{var.equal = FALSE} (Welch path):
-    \itemize{
-      \item If Fligner passes (p > 0.05): standard ANOVA + Duncan or Tukey is used.
-      \item If Fligner fails: Welch test + Games-Howell post-hoc is used.
-      \item CV and Power are reported only when ff_p > 0.01.
-      \item If any pairwise comparison has NA p-value or any group is missing
-            from the letter display, letters are suppressed for the entire cluster.
-    }
+  \item Si el post-hoc de la ruta falla, prueba la siguiente ruta viable
+        (A/B -> no paramétrica; Friedman -> Kruskal; Kruskal <-> Dunn).
+        / If the post-hoc fails, the next viable route is tried.
 }
+
+El gráfico incluye una nota (caption) con la ruta usada en cada panel,
+por qué, ventajas, desventajas y alcance; puede quitarse con
+\code{+ ggplot2::labs(caption = NULL)}. CV y Power se calculan siempre a
+partir del ANOVA clásico.
+
+The plot includes a caption describing the route used in each panel, why,
+advantages, disadvantages and scope. CV and Power are always computed from
+the classic ANOVA fit.
 
 Los argumentos \code{orden_factor}, \code{grupo1_orden} y \code{grupo2_orden}
 aceptan vectores nombrados o no:
@@ -279,6 +299,7 @@ colores = c("purple3", "green4","black", "red3")
 
 
 # Example 5: Real Data pimiento_hibridacion
+\donttest{
 
 data(pimiento_hibridacion)
 
@@ -303,6 +324,7 @@ estructura = "~dia",
 colores = c("purple3", "green4","black", "red3")
 )$plot +
   ggplot2::labs(col = "Semanas de hibridación")
+}
 
 
 }

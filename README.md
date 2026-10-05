@@ -56,6 +56,7 @@ It provides automated workflows for:
 - One-way and two-way ANOVA
 - Post-hoc comparisons (Tukey HSD, Duncan MRT, Games-Howell)
 - Heteroscedastic data (Welch ANOVA)
+- Non-parametric analysis (Kruskal-Wallis, Dunn, Friedman)
 - Statistical assumption checking (Shapiro-Wilk, Fligner-Killeen)
 - Coefficient of variation and statistical power
 - Publication-ready visualizations (ggplot2)
@@ -97,19 +98,32 @@ resultado
 ```
 
 The function automatically evaluates the statistical assumptions and
-selects the appropriate analysis path:
+selects the appropriate analysis path. The goal is simple: **place the
+grouping letters through a viable and defensible statistical route.**
 
-    Shapiro-Wilk (normality)
+    Clusters (one panel per group combination)
+            ↓
+    Sufficient data? (≥ 2 treatments, ≥ 3 obs. per treatment)
+            ↓
+    Shapiro-Wilk (normality of residuals)
             ↓
     Fligner-Killeen (homogeneity of variances)
             ↓
-    ┌──────────────────────┐        ┌──────────────────────┐
-    │  Variances adequate  │        │  Heteroscedasticity  │
-    │                      │   OR   │                      │
-    │       ANOVA          │        │     Welch ANOVA      │
-    │         ↓            │        │          ↓           │
-    │  Tukey / Duncan      │        │    Games-Howell      │
-    └──────────────────────┘        └──────────────────────┘
+    ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+    │ A  Normal +          │  │ B  Normal +          │  │ C  Not normal +      │  │ D  Not normal +      │
+    │    homogeneous       │  │    heteroscedastic   │  │    homogeneous       │  │    heteroscedastic   │
+    │                      │  │                      │  │                      │  │                      │
+    │       ANOVA          │  │     Welch ANOVA      │  │  Kruskal-Wallis      │  │  Same as C + note    │
+    │         ↓            │  │          ↓           │  │  (or Friedman with   │  │  on heterogeneous    │
+    │  Tukey / Duncan      │  │    Games-Howell      │  │   blocks) / Dunn     │  │  variances           │
+    └──────────────────────┘  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘
+
+Block and second factor are then handled within the selected route. If a
+post-hoc test cannot be computed, the next viable route is tried, and
+each figure includes a note explaining which route was used and why.
+
+> Since version 0.4.0 the route is selected automatically; the
+> `var.equal` argument is kept only for backward compatibility.
 
 The researcher does not need to manually reproduce every step for every
 variable.
@@ -124,11 +138,18 @@ Multiple Range Test
 **Robust analysis** (when variance homogeneity is not supported) - Welch
 ANOVA - Games-Howell post-hoc test
 
+**Non-parametric analysis** (when residual normality is not supported) -
+Kruskal-Wallis with `agricolae` letters or Dunn post-hoc test
+(`np_test`) - Friedman test for blocked designs (RCBD) - P-value
+adjustment selectable with `p.adj` (default Bonferroni)
+
 **Diagnostics** - Shapiro-Wilk test for residual normality -
 Fligner-Killeen test for homogeneity of variances
 
 **Additional output** - Coefficient of variation (CV) - Statistical
-power - Means, grouping letters, and significance annotations
+power - Means, grouping letters, and significance annotations -
+Statistical route used in each panel (`$stats`: route, method, p-value
+and notes)
 
 ------------------------------------------------------------------------
 
@@ -141,6 +162,8 @@ including:
 - Statistical grouping letters
 - Boxplots with treatment comparisons
 - CV and statistical power annotations
+- A method note describing the statistical route used, why, its
+  advantages, limitations, and scope
 
 The output can be further customized using the full ggplot2 ecosystem.
 
@@ -342,6 +365,9 @@ statistical methods:
 | Games-Howell               | Games & Howell (1976)    |
 | Shapiro-Wilk               | Shapiro & Wilk (1965)    |
 | Fligner-Killeen            | Fligner & Killeen (1976) |
+| Kruskal-Wallis             | Kruskal & Wallis (1952)  |
+| Dunn test                  | Dunn (1964)              |
+| Friedman test              | Friedman (1937)          |
 | Statistical power          | Cohen (1988)             |
 
 The package builds on the R ecosystem, including `ggplot2` and

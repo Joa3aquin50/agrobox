@@ -1,1 +1,6 @@
 .Rproj.user
+R.zip
+*.Rcheck
+agrobox-manual.tex
+.Rhistory
+.RData
